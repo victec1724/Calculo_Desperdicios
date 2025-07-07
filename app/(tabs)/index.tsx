@@ -5,13 +5,14 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 
 export default function Index() {
   const [image, setImage] = useState<string | null>(null);
 
-  const pickImage = async () => {
+  // Función para seleccionar foto de la galería
+  const pickImageFromGallery = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       alert('Se requiere acceso a tus fotos');
@@ -30,16 +31,42 @@ export default function Index() {
     }
   };
 
+  // Función para tomar una foto con la cámara
+  const takePhotoWithCamera = async () => {
+    const cameraStatus = await ImagePicker.requestCameraPermissionsAsync();
+    if (cameraStatus.status !== 'granted') {
+      alert('Se requiere acceso a la cámara');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setImage(result.assets[0].uri);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Calculadora de Desperdicio de Alimentos</Text>
 
-      <TouchableOpacity style={styles.button} onPress={pickImage}>
-        <Text style={styles.buttonText}>Seleccionar Foto</Text>
+      {/* Botones */}
+      <TouchableOpacity style={styles.buttonGallery} onPress={pickImageFromGallery}>
+        <Text style={styles.buttonText}>Seleccionar Foto de Galería</Text>
       </TouchableOpacity>
 
+      <TouchableOpacity style={styles.buttonCamera} onPress={takePhotoWithCamera}>
+        <Text style={styles.buttonText}>Tomar Foto con la Cámara</Text>
+      </TouchableOpacity>
+
+      {/* Imagen seleccionada o capturada */}
       {image && <Image source={{ uri: image }} style={styles.image} />}
 
+      {/* Resultado del análisis */}
       <View style={styles.resultContainer}>
         <Text style={styles.resultText}>
           Resultado del análisis aparecerá aquí.
@@ -63,12 +90,23 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
-  button: {
+  buttonGallery: {
     backgroundColor: '#4CAF50',
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 8,
+    marginBottom: 15,
+    width: '100%',
+    alignItems: 'center',
+  },
+  buttonCamera: {
+    backgroundColor: '#2196F3',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
     marginBottom: 20,
+    width: '100%',
+    alignItems: 'center',
   },
   buttonText: {
     color: 'white',
@@ -80,6 +118,7 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 10,
     marginBottom: 20,
+    resizeMode: 'cover',
   },
   resultContainer: {
     padding: 15,
