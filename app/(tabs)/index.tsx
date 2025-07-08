@@ -1,6 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   StyleSheet,
   Text,
@@ -10,12 +11,15 @@ import {
 
 export default function Index() {
   const [image, setImage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Función para seleccionar foto de la galería
   const pickImageFromGallery = async () => {
+    setIsLoading(true);
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       alert('Se requiere acceso a tus fotos');
+      setIsLoading(false);
       return;
     }
 
@@ -29,13 +33,16 @@ export default function Index() {
     if (!result.canceled) {
       setImage(result.assets[0].uri);
     }
+    setIsLoading(false);
   };
 
   // Función para tomar una foto con la cámara
   const takePhotoWithCamera = async () => {
+    setIsLoading(true);
     const cameraStatus = await ImagePicker.requestCameraPermissionsAsync();
     if (cameraStatus.status !== 'granted') {
       alert('Se requiere acceso a la cámara');
+      setIsLoading(false);
       return;
     }
 
@@ -48,6 +55,7 @@ export default function Index() {
     if (!result.canceled) {
       setImage(result.assets[0].uri);
     }
+    setIsLoading(false);
   };
 
   return (
@@ -62,6 +70,24 @@ export default function Index() {
       <TouchableOpacity style={styles.buttonCamera} onPress={takePhotoWithCamera}>
         <Text style={styles.buttonText}>Tomar Foto con la Cámara</Text>
       </TouchableOpacity>
+
+      {/* Botón para limpiar selección */}
+      <TouchableOpacity style={styles.buttonClear} onPress={() => setImage(null)}>
+        <Text style={styles.buttonClearText}>Limpiar Selección</Text>
+      </TouchableOpacity>
+
+      {/* Mensaje si no hay imagen */}
+      {!image && !isLoading && (
+        <Text style={styles.placeholderText}>No se ha seleccionado ninguna imagen.</Text>
+      )}
+
+      {/* Indicador de carga */}
+      {isLoading && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text style={styles.loadingText}>Cargando imagen...</Text>
+        </View>
+      )}
 
       {/* Imagen seleccionada o capturada */}
       {image && <Image source={{ uri: image }} style={styles.image} />}
@@ -112,6 +138,32 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  buttonClear: {
+    backgroundColor: '#9e9e9e',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 6,
+    marginTop: 10,
+  },
+  buttonClearText: {
+    color: 'white',
+    fontSize: 14,
+  },
+  placeholderText: {
+    fontSize: 14,
+    color: '#aaa',
+    marginBottom: 20,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 20,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#888',
   },
   image: {
     width: 300,
