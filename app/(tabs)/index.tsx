@@ -17,7 +17,31 @@ type ImageRecord = {
   id: string;
   uri: string;
   date: string;
-  details?: string; // <-- aquí guardamos los detalles de la API
+  details?: string;
+  annotatedImageId?: string;
+  detections?: Detection[];
+  counts?: Count[];
+  weightByType?: WeightByType[];
+  totalWeight?: number;
+  weightUnit?: string;
+};
+
+type Detection = {
+  label: string;
+  confidence: number;
+  bbox: number[];
+};
+
+type Count = {
+  label: string;
+  count: number;
+};
+
+type WeightByType = {
+  label: string;
+  count: number;
+  averageWeight: number;
+  totalWeight: number;
 };
 
 export default function Index() {
@@ -26,10 +50,12 @@ export default function Index() {
   const [isLoading, setIsLoading] = useState(false);
   const [records, setRecords] = useState<ImageRecord[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
-  const [selectedRecord, setSelectedRecord] = useState<ImageRecord | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<ImageRecord | null>(
+    null
+  );
 
   // Cambia aquí a tu IP local y puerto con protocolo http://
-  const BACKEND_URL = "http://192.168.100.9:3000/detect";
+const BACKEND_URL = "http://192.168.100.9:3000/api/detect";
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -51,36 +77,52 @@ export default function Index() {
 
   // Enviar imagen al backend y guardar detalles en el registro correspondiente
   const sendImageToBackend = async (imageUri: string, recordId: string) => {
-    try {
-      const formData = new FormData();
-      formData.append("file", {
-        uri: imageUri,
-        name: "photo.jpg",
-        type: "image/jpeg",
-      } as any);
+  try {
+    const formData = new FormData();
+    formData.append("file", {
+      uri: imageUri,
+      name: "photo.jpg",
+      type: "image/jpeg",
+    } as any);
 
-      const response = await fetch(BACKEND_URL, {
-        method: "POST",
-        body: formData,
-      });
+    const response = await fetch(BACKEND_URL, {
+      method: "POST",
+      body: formData,
+      // 👇 No pongas 'Content-Type', deja que lo haga automáticamente React Native
+    });
 
-      if (!response.ok) throw new Error("Error al enviar imagen");
+    const responseText = await response.text();
+    console.log("Código de respuesta:", response.status);
+    console.log("Texto devuelto:", responseText);
 
-      const data = await response.json();
-      console.log("Detecciones:", data);
+    if (!response.ok) throw new Error("Error al enviar imagen");
 
-      const detailsString = JSON.stringify(data, null, 2);
+    const data = JSON.parse(responseText); // parseamos ahora manualmente
 
-      setRecords((prev) =>
-        prev.map((rec) =>
-          rec.id === recordId ? { ...rec, details: detailsString } : rec
-        )
-      );
-    } catch (error) {
-      console.error("Error en la solicitud:", error);
-      alert("Error al procesar imagen");
-    }
-  };
+    console.log("Respuesta del backend (JSON):", data);
+
+    setRecords((prev) =>
+      prev.map((rec) =>
+        rec.id === recordId
+          ? {
+              ...rec,
+              details: data.message || "Procesado",
+              annotatedImageId: data.annotatedImageId,
+              detections: data.detections,
+              counts: data.counts,
+              weightByType: data.weightByType,
+              totalWeight: data.totalWeight,
+              weightUnit: data.weightUnit,
+            }
+          : rec
+      )
+    );
+  } catch (error) {
+    console.error("Error en la solicitud:", error);
+    alert(`Error al procesar imagen: ${error}`);
+  }
+};
+
 
   // Seleccionar imagen desde galería
   const pickImageFromGallery = async () => {
@@ -120,7 +162,7 @@ export default function Index() {
 
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
-      aspect: [4, 3],
+      //aspect: [4, 3],
       quality: 1,
     });
 
@@ -160,6 +202,16 @@ export default function Index() {
     </View>
   );
 
+  if (showSplash) {
+    return (
+      <View style={styles.splashContainer}>
+        <MaterialIcons name="restaurant" size={64} color="#37474F" />
+        <Text style={styles.splashTitle}>Desperdicio de Alimentos</Text>
+        <Text style={styles.splashSubtitle}>Cargando aplicación...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -185,7 +237,10 @@ export default function Index() {
         <Text style={styles.buttonText}>Seleccionar Foto</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.buttonCamera} onPress={takePhotoWithCamera}>
+      <TouchableOpacity
+        style={styles.buttonCamera}
+        onPress={takePhotoWithCamera}
+      >
         <MaterialIcons
           name="photo-camera"
           size={24}
@@ -195,7 +250,10 @@ export default function Index() {
         <Text style={styles.buttonText}>Tomar Foto</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.buttonClear} onPress={() => setImage(null)}>
+      <TouchableOpacity
+        style={styles.buttonClear}
+        onPress={() => setImage(null)}
+      >
         <MaterialIcons
           name="delete"
           size={24}
@@ -220,7 +278,9 @@ export default function Index() {
 
       {image && <Image source={{ uri: image }} style={styles.image} />}
 
-      <Text style={[styles.title, { marginTop: 20 }]}>Historial de Imágenes</Text>
+      <Text style={[styles.title, { marginTop: 20 }]}>
+        Historial de Imágenes
+      </Text>
       {records.length === 0 ? (
         <Text style={styles.placeholderText}>No hay registros guardados.</Text>
       ) : (
@@ -242,14 +302,23 @@ export default function Index() {
                   source={{ uri: selectedRecord.uri }}
                   style={styles.modalImage}
                 />
-                <Text style={styles.modalDate}>Fecha: {selectedRecord.date}</Text>
+                <Text style={styles.modalDate}>
+                  Fecha: {selectedRecord.date}
+                </Text>
 
-                {selectedRecord.details ? (
-                  <Text style={styles.modalDetails}>{selectedRecord.details}</Text>
-                ) : (
-                  <Text style={{ fontStyle: "italic", marginBottom: 15 }}>
-                    No hay detalles disponibles.
-                  </Text>
+                {selectedRecord.details && (
+                  <>
+                    <Text style={styles.modalDetails}>
+                      {selectedRecord.details}
+                    </Text>
+
+
+
+                    <Text style={[styles.modalDetails, { fontWeight: "bold" }]}>
+                      Peso total: {selectedRecord.totalWeight}{" "}
+                      {selectedRecord.weightUnit}
+                    </Text>
+                  </>
                 )}
 
                 <TouchableOpacity
@@ -281,67 +350,67 @@ const styles = StyleSheet.create({
     marginVertical: 10,
     textAlign: "center",
   },
-buttonGallery: {
-  backgroundColor: "#2E7D32", // Verde profesional
-  paddingVertical: 12,
-  paddingHorizontal: 24,
-  borderRadius: 10,
-  marginBottom: 15,
-  width: "100%",
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "center",
-},
-header: {
-  flexDirection: "row",
-  alignItems: "center",
-  backgroundColor: "#37474F", // Gris profesional
-  paddingVertical: 15,
-  paddingHorizontal: 20,
-  borderRadius: 10,
-  elevation: 4,
-  marginBottom: 20,
-  width: "100%",
-  justifyContent: "center",
-},
-headerTitle: {
-  color: "white",
-  fontSize: 20,
-  fontWeight: "bold",
-  textAlign: "center",
-},
-buttonCamera: {
-  backgroundColor: "#1565C0", // Azul profesional
-  paddingVertical: 12,
-  paddingHorizontal: 24,
-  borderRadius: 10,
-  marginBottom: 15,
-  width: "100%",
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "center",
-},
-buttonClear: {
-  backgroundColor: "#D32F2F", // Rojo profesional
-  paddingVertical: 12,
-  paddingHorizontal: 24,
-  borderRadius: 10,
-  marginBottom: 20,
-  width: "100%",
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "center",
-},
-buttonText: {
-  color: "white",
-  fontSize: 16,
-  fontWeight: "bold",
-},
-buttonClearText: {
-  color: "white",
-  fontSize: 16,
-  fontWeight: "bold",
-},
+  buttonGallery: {
+    backgroundColor: "#2E7D32", // Verde profesional
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    marginBottom: 15,
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#37474F", // Gris profesional
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    elevation: 4,
+    marginBottom: 20,
+    width: "100%",
+    justifyContent: "center",
+  },
+  headerTitle: {
+    color: "white",
+    fontSize: 20,
+    fontWeight: "bold",
+    textAlign: "center",
+  },
+  buttonCamera: {
+    backgroundColor: "#1565C0", // Azul profesional
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    marginBottom: 15,
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buttonClear: {
+    backgroundColor: "#D32F2F", // Rojo profesional
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    marginBottom: 20,
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buttonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  buttonClearText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
   placeholderText: {
     fontSize: 14,
     color: "#aaa",
@@ -442,21 +511,20 @@ buttonClearText: {
     marginBottom: 15,
   },
   splashContainer: {
-  flex: 1,
-  backgroundColor: "#fff",
-  justifyContent: "center",
-  alignItems: "center",
-},
-splashTitle: {
-  fontSize: 24,
-  fontWeight: "bold",
-  color: "#37474F", // Mismo gris del header
-  marginTop: 20,
-},
-splashSubtitle: {
-  fontSize: 16,
-  color: "#777",
-  marginTop: 10,
-},
-
+    flex: 1,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  splashTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#37474F", // Mismo gris del header
+    marginTop: 20,
+  },
+  splashSubtitle: {
+    fontSize: 16,
+    color: "#777",
+    marginTop: 10,
+  },
 });
